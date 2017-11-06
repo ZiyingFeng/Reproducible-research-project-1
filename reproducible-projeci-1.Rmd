@@ -1,0 +1,135 @@
+# Reproducible Research Project 1
+<hr>
+
+```{r setoptions, echo=FALSE}
+library("knitr")
+opts_chunk$set(echo=TRUE)
+```
+
+## (I) Loading and preprocessing the data
+
+1. Load the data
+2. Process/transform the data (if necessary) into a format suitable for your analysis
+```{r}
+data <- read.csv("activity.csv")
+class(data)
+dim(data)
+names(data)
+```
+<br><br>
+
+## (II) What is mean total number of steps taken per day?
+
+1. Calculate the total number of steps taken per day
+```{r}
+stepsPerDay <- tapply(data$steps, data$date, sum, na.rm=TRUE)
+stepsPerDay
+```
+
+2. Make a histogram of the total number of steps taken each day
+```{r}
+hist(stepsPerDay)
+```
+
+3. Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+data_dateSplit <- split(data, data$date)
+meanPerDay <- tapply(data$steps, data$date, mean, na.rm=TRUE)
+medianPerDay <- tapply(data$steps, data$date, median, na.rm=TRUE)
+mean_median_table <- data.frame(meanPerDay, medianPerDay)
+```
+
+```{r showTable, results='asis'}
+library(xtable)
+xt <- xtable(mean_median_table)
+print(xt, type="html")
+``` 
+<br><br>
+
+## (III) What is the average daily activity pattern?
+
+1. Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+avg_step_5min <- tapply(data$steps, data$interval, mean, na.rm=TRUE)
+plot(avg_step_5min, type = "l", main = "Time Series Plot", xlab = "Time interval", ylab = "Average steps")
+```
+
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+avg_step_5min_df <- data.frame(avg_step_5min)
+max_step_interval <- avg_step_5min_df[which.max(avg_step_5min_df[,1]),]
+```
+`r max_step_interval` contains the maximum number of steps.
+
+<br><br>
+
+## (IV) Imputing missing values
+
+1. Calculate and report the total number of missing values in the dataset
+```{r}
+sum_na <- sum(is.na(data$steps))
+```
+There are `r sum_na` missing values in the dataset.
+
+2. Use the mean for that 5-minute interval to fill in all the mssing values in the dataset
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in
+```{r, cache=TRUE}
+na_index <- which(is.na(data$steps))
+data_imputNA <- data
+avg_step_5min_df$interval <- as.numeric(row.names(avg_step_5min_df))
+
+for (i in 1:nrow(data_imputNA)){
+  if (is.na(data_imputNA[i,]$steps)){
+    interval_index <- which(avg_step_5min_df$interval == data_imputNA[i,]$interval)
+    data_imputNA[i,]$steps <- avg_step_5min_df$avg_step_5min[interval_index]
+  }
+}
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r}
+par(mar = c(5,4,1,1), las = 1)
+stepsPerDay_imputNA <- tapply(data_imputNA$steps, data_imputNA$date, sum, na.rm=TRUE)
+hist(stepsPerDay)
+
+data_imputNA_dateSplit <- split(data_imputNA, data_imputNA$date)
+meanPerDay_imputNA <- tapply(data_imputNA$steps, data_imputNA$date, mean, na.rm=TRUE)
+medianPerDay_imputNA <- tapply(data_imputNA$steps, data_imputNA$date, median, na.rm=TRUE)
+mean_median_table_imputNA <- data.frame(meanPerDay_imputNA, medianPerDay_imputNA)
+```
+
+```{r showTable_imputNA, results='asis'}
+library(xtable)
+xt_imputNA <- xtable(mean_median_table_imputNA)
+print(xt_imputNA, type="html")
+``` 
+When comparing the two tables, the values are almost the same except for those that were missing values, they get values in the table after imputting the missing values. 
+
+<br><br>
+
+## (V) Are there differences in activity patterns between weekdays and weekends?
+1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day
+```{r, cache=TRUE}
+data_imputNA$weekday <- weekdays(as.POSIXct(data_imputNA$date, tz = "GMT"))
+
+data_imputNA$factor <- data_imputNA$weekday
+
+for (i in 1:nrow(data_imputNA)) {
+  if (data_imputNA[i,]$weekday == "Saturday" | data_imputNA[i,]$weekday == "Sunday") {
+    data_imputNA[i,]$factor <- "weekend"
+  }
+  else
+    data_imputNA[i,]$factor <- "weekday"
+}
+
+data_imputNA$factor <- as.factor(data_imputNA$factor)
+```
+
+2. Make a panel plot containing a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis)
+```{r}
+library(lattice)
+avg_data_imputNA_factorSplit <- aggregate(steps~interval+factor, data = data_imputNA, mean)
+
+xyplot(steps ~ interval | factor, data = avg_data_imputNA_factorSplit, layout = c(1,2), type = "l")
+```
+
